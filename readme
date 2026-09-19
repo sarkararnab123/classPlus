@@ -1,658 +1,208 @@
-# ClassPlus — Assignment Notification Backend
+# ClassPlus Backend
 
-A scalable backend system where **teachers create assignments and all students assigned to that teacher receive real-time notifications**.
+A backend system where teachers create assignments and all students assigned to that teacher receive **real-time notifications**.
 
-The project focuses on backend architecture and asynchronous processing using:
+### Tech Stack
 
-* Node.js
-* Express.js
-* MongoDB
+* Node.js + Express
+* MongoDB + Mongoose
 * Redis
 * BullMQ
 * Redis Pub/Sub
 * Socket.IO
-* Docker & Docker Compose
+* Docker + Docker Compose
 
 ---
 
-# Features
-
-* Teacher and student management
-* Teacher creates assignments
-* Students are associated with teachers
-* Assignment notifications are generated asynchronously
-* BullMQ background job processing
-* Redis-based job queue
-* Redis Pub/Sub for notification events
-* Socket.IO real-time notifications
-* MongoDB persistence
-* Dockerized development environment
-* Separate API server and BullMQ worker
-* Retryable background jobs
-* Scalable worker architecture
-
----
-
-# System Architecture
-
-```text
-                         ┌──────────────────┐
-                         │     Teacher      │
-                         │                  │
-                         │ Create Assignment│
-                         └────────┬─────────┘
-                                  │
-                                  ▼
-                         ┌──────────────────┐
-                         │   Express API    │
-                         │                  │
-                         │ Assignment API   │
-                         └────────┬─────────┘
-                                  │
-                    ┌─────────────┴─────────────┐
-                    │                           │
-                    ▼                           ▼
-             ┌─────────────┐              ┌─────────────┐
-             │  MongoDB    │              │   BullMQ    │
-             │             │              │    Queue    │
-             │ Assignment  │              └──────┬──────┘
-             │ Data        │                     │
-             └─────────────┘                     ▼
-                                          ┌──────────────┐
-                                          │   Worker     │
-                                          │              │
-                                          │ Find Students│
-                                          │ Create       │
-                                          │ Notifications│
-                                          └──────┬───────┘
-                                                 │
-                                  ┌──────────────┴──────────────┐
-                                  │                             │
-                                  ▼                             ▼
-                           ┌─────────────┐              ┌─────────────┐
-                           │  MongoDB    │              │ Redis       │
-                           │             │              │ Pub/Sub     │
-                           │ Notifications│              └──────┬──────┘
-                           └─────────────┘                     │
-                                                               │
-                                                               ▼
-                                                     ┌─────────────────┐
-                                                     │ API Subscriber  │
-                                                     │                 │
-                                                     │ Redis Subscriber│
-                                                     └────────┬────────┘
-                                                              │
-                                                              ▼
-                                                     ┌─────────────────┐
-                                                     │    Socket.IO    │
-                                                     │                 │
-                                                     │ Student Room    │
-                                                     └────────┬────────┘
-                                                              │
-                                                              ▼
-                                                     ┌─────────────────┐
-                                                     │     Student     │
-                                                     │       🔔        │
-                                                     │ New Assignment  │
-                                                     └─────────────────┘
-```
-
----
-
-# Assignment Notification Flow
-
-When a teacher creates an assignment, the following process takes place:
-
-1. Teacher sends POST request
-             ↓
-2. Express Controller receives request
-             ↓
-3. Assignment saved in MongoDB
-             ↓
-4. BullMQ job added to Redis
-             ↓
-5. API immediately responds
-             ↓
-6. BullMQ Worker processes job
-             ↓
-7. Worker finds students assigned to teacher
-             ↓
-8. Notifications are created in MongoDB
-             ↓
-9. Worker publishes notification through Redis Pub/Sub
-             ↓
-10. Redis Subscriber receives event
-             ↓
-11. Socket.IO sends event to student's room
-             ↓
-12. Student receives real-time notification
-
-
-# Redis
-
-Redis is used for fast in-memory operations and messaging.
-
-In this project Redis has multiple responsibilities:
-
-```text
-Redis
-├── BullMQ job storage
-├── BullMQ communication
-└── Redis Pub/Sub
-```
-
-# BullMQ
-
-BullMQ is used for **background job processing**.
-
-Instead of making the teacher wait while hundreds of notifications are generated:
+## 🏗️ System Design
 
 ```text
 Teacher
-   ↓
-API
-   ↓
-Add job to BullMQ
-   ↓
-Return response
+   │
+   ▼
+Express API
+   │
+   ├──► MongoDB
+   │     Save Assignment
+   │
+   └──► BullMQ Queue
+             │
+             ▼
+          Worker
+             │
+             ├──► Find Students
+             ├──► Create Notifications
+             │
+             └──► Redis Pub/Sub
+                       │
+                       ▼
+                  API Subscriber
+                       │
+                       ▼
+                    Socket.IO
+                       │
+                       ▼
+                    Students
 ```
 
-The worker handles the expensive operation asynchronously.
+### Flow
 
 ```text
-BullMQ
-   ↓
-Worker
-   ↓
-Process notification job
+Create Assignment
+       ↓
+Save in MongoDB
+       ↓
+Add BullMQ Job
+       ↓
+Worker processes job
+       ↓
+Create notifications
+       ↓
+Publish through Redis
+       ↓
+Socket.IO
+       ↓
+Student receives notification
 ```
-
-BullMQ also provides functionality such as:
-
-* Job persistence
-* Retries
-* Failed jobs
-* Delayed jobs
-* Backoff
-* Concurrency
-* Worker scaling
-
-# Project Structure
-
-classPlus/
-│
-├── src/
-│   │
-│   ├── config/
-│   │   └── db.js
-│   │
-│   ├── controllers/
-│   │   ├── assignment.controller.js
-│   │   └── user.controller.js
-│   │
-│   ├── models/
-│   │   ├── user.model.js
-│   │   ├── assignment.model.js
-│   │   └── notification.model.js
-│   │
-│   ├── routes/
-│   │   ├── assignment.routes.js
-│   │   └── user.routes.js
-│   │
-│   ├── redis/
-│   │   ├── subscriber.js
-│   │   └── notification.subscriber.js
-│   │
-│   ├── socket/
-│   │   └── socket.js
-│   │
-│   └── server.js
-│
-├── bullmq/
-│   ├── notification.queue.js
-│   └── notification.worker.js
-│
-├── test/
-│   └── socket-client.js
-│
-├── .dockerignore
-├── .env
-├── .gitignore
-├── Dockerfile
-├── docker-compose.yml
-├── package.json
-└── README.md
-
-#  Main Backend Components
-
-## API Server
-
-The API server handles:
-
-* HTTP requests
-* Assignment creation
-* User operations
-* Socket.IO connections
-* Redis subscription
-
-
-## BullMQ Worker
-
-The worker runs separately from the API.
-
-```text
-API Container
-     │
-     │ Add Job
-     ▼
-   Redis
-     │
-     ▼
-Worker Container
-```
-
-This separation allows the worker to be scaled independently.
 
 ---
 
-# Assignment Creation
+## 📁 Structure
 
-Example request:
+```text
+classPlus/
+├── controllers/
+├── routes/
+├── models/
+├── config/
+├── redis/
+├── bullmq/
+│   ├── notification.queue.js
+│   └── notification.worker.js
+├── server.js
+├── Dockerfile
+├── docker-compose.yml
+└── .env
+```
+
+---
+
+## 🔌 API Routes
+
+### Create Teacher
+
+```http
+POST /api/users/teacher
+```
+
+### Create Student
+
+```http
+POST /api/users/student
+```
+
+### Assign Student to Teacher
+
+```http
+POST /api/users/assign-student
+```
+
+### Create Assignment
 
 ```http
 POST /api/assignments
 ```
 
+Example:
+
 ```json
 {
-  "teacherId": "teacher_id",
+  "teacherId": "TEACHER_ID",
   "title": "Operating Systems Assignment",
-  "description": "Explain process scheduling algorithms",
+  "description": "Explain process scheduling",
   "dueDate": "2026-09-25"
 }
 ```
 
-The API:
-
-1. Verifies the teacher.
-2. Creates the assignment.
-3. Adds a BullMQ job.
-4. Returns the response.
-
-Example response:
-
-```json
-{
-  "message": "Assignment created successfully",
-  "assignment": {
-    "title": "Operating Systems Assignment",
-    "description": "Explain process scheduling algorithms"
-  }
-}
-```
-
 ---
 
-# ⚙️ BullMQ Job Flow
+## 🔔 Socket.IO
 
-A job contains data such as:
-
-```json
-{
-  "assignmentId": "assignment_id",
-  "teacherId": "teacher_id",
-  "title": "Operating Systems Assignment"
-}
-```
-
-The worker receives the job:
+Students join their own room:
 
 ```text
-Processing job 1
-       ↓
-Find students
-       ↓
-Create notifications
-       ↓
-Publish notification event
-       ↓
-Job completed
-```
-
----
-
-# 📡 Redis Pub/Sub Flow
-
-The worker publishes:
-
-```text
-Channel:
-assignment-notification
-```
-
-Example:
-
-```json
-{
-  "notificationId": "notification_id",
-  "studentId": "student_id",
-  "assignmentId": "assignment_id",
-  "message": "New assignment: Operating Systems Assignment"
-}
-```
-
-The API server subscribes to the same channel.
-
-```text
-Worker
-  │
-  │ PUBLISH
-  ▼
-Redis
-  │
-  │ SUBSCRIBE
-  ▼
-API Server
-```
-
----
-
-# 🔔 Socket.IO Flow
-
-When a student connects:
-
-```text
-Student
-   ↓
-Socket.IO
-   ↓
-join-user-room
-   ↓
 student:<studentId>
 ```
 
-Example:
+Notification event:
 
-```javascript
-socket.emit(
-    "join-user-room",
-    studentId
-);
-```
-
-The server joins:
-
-```javascript
-socket.join(`student:${studentId}`);
-```
-
-When the notification arrives:
-
-```javascript
-io.to(`student:${studentId}`).emit(
-    "new-assignment",
-    data
-);
+```text
+new-assignment
 ```
 
 ---
 
-# 🐳 Docker Architecture
+## ⚙️ Setup
 
-The project uses Docker Compose.
-
-```text
-                 Docker Compose
-                       │
-        ┌──────────────┼───────────────┐
-        │              │               │
-        ▼              ▼               ▼
-   ┌─────────┐   ┌──────────┐   ┌──────────┐
-   │   API   │   │  Worker  │   │  Redis   │
-   │         │   │          │   │          │
-   │ Express │   │ BullMQ   │   │ BullMQ   │
-   │ Socket  │   │ Worker   │   │ Pub/Sub  │
-   └────┬────┘   └────┬─────┘   └──────────┘
-        │              │
-        └──────────────┼──────────────┐
-                       │              │
-                       ▼              ▼
-                  MongoDB Atlas    Redis
-```
-
-MongoDB can be hosted separately using MongoDB Atlas.
-
----
-
-# 🐳 Docker Services
-
-## API
-
-Runs:
-
-```bash
-node src/server.js
-```
-
-## Worker
-
-Runs:
-
-```bash
-node bullmq/notification.worker.js
-```
-
-## Redis
-
-Runs:
-
-```text
-Redis 7
-```
-
-The API and worker communicate with Redis using:
-
-```text
-redis:6379
-```
-
-inside Docker.
-
----
-
-# Running Locally Without Docker
-
-Install dependencies:
+### 1. Install
 
 ```bash
 npm install
 ```
 
-Start the API:
+### 2. Create `.env`
 
-```bash
-node src/server.js
+```env
+PORT=5000
+MONGO_URI=your_mongodb_uri
+REDIS_HOST=redis
+REDIS_URL=redis://redis:6379
 ```
 
-Start the worker separately:
-
-```bash
-node bullmq/notification.worker.js
-```
-
-Make sure Redis is running locally.
-
----
-
-# Running With Docker
-
-Build the containers:
-
-```bash
-docker compose build
-```
-
-Start:
-
-```bash
-docker compose up
-```
-
-Run in detached mode:
-
-```bash
-docker compose up -d
-```
-
-Stop:
-
-```bash
-docker compose down
-```
-
-Rebuild:
+### 3. Run with Docker
 
 ```bash
 docker compose up --build
 ```
 
+### 4. Run without Docker
+
+Start API:
+
+```bash
+node server.js
+```
+
+Start worker:
+
+```bash
+node bullmq/notification.worker.js
+```
+
 ---
 
-# 📊 Scaling Architecture
+## 🐳 Docker
 
-Suppose one teacher has 500 students.
-
-The API should not synchronously perform all notification work.
-
-Instead:
+Docker Compose runs:
 
 ```text
-Teacher
-   ↓
 API
-   ↓
-BullMQ
-   ↓
 Worker
-   ↓
-500 notifications
-```
-
-For larger workloads, multiple workers can process jobs:
-
-                     BullMQ
-                        │
-          ┌─────────────┼─────────────┐
-          ▼             ▼             ▼
-      Worker 1       Worker 2      Worker 3
-          │             │             │
-          └─────────────┼─────────────┘
-                        ▼
-                     MongoDB
-
-BullMQ supports concurrency and multiple workers, allowing background processing to scale independently from the API.
-
-
-# ☁️ Deployment Architecture
-
-The backend can be deployed using Render.
-
-Recommended architecture:
-
-```text
-                    Internet
-                       │
-                       ▼
-              ┌─────────────────┐
-              │ Render Web      │
-              │ Service         │
-              │                 │
-              │ Express         │
-              │ Socket.IO       │
-              │ Redis Subscriber│
-              └────────┬────────┘
-                       │
-             ┌─────────┴──────────┐
-             ▼                    ▼
-      MongoDB Atlas          Render Redis
-                                  │
-                                  ▼
-                         ┌─────────────────┐
-                         │ Render          │
-                         │ Background      │
-                         │ Worker          │
-                         │                 │
-                         │ BullMQ          │
-                         └─────────────────┘
-```
-
-The API and BullMQ worker are deployed as separate services.
-
----
-
-# 🧠 Key Backend Concepts Demonstrated
-
-This project demonstrates understanding of:
-
-```text
-REST API
-   ↓
-Asynchronous Processing
-   ↓
-Message Queues
-   ↓
 Redis
-   ↓
-BullMQ
-   ↓
-Background Workers
-   ↓
-Pub/Sub
-   ↓
-WebSockets
-   ↓
-Docker
-   ↓
-Distributed System Concepts
 ```
+
+MongoDB can be hosted using **MongoDB Atlas**.
 
 ---
 
-# 🎯 Project Goal
-
-The primary goal of ClassPlus is not simply to create an assignment management API.
-
-The project demonstrates how a backend can handle asynchronous workloads and real-time events.
-
-The important architectural separation is:
+## 🎯 Main Concepts
 
 ```text
-HTTP Request
-     │
-     ▼
-API Server
-     │
-     ▼
-Queue
-     │
-     ▼
-Background Worker
-     │
-     ▼
-Database
-     │
-     ▼
-Event
-     │
-     ▼
-Pub/Sub
-     │
-     ▼
-WebSocket
-     │
-     ▼
-User
-
-# 📄 License
-
-This project is created for educational and portfolio purposes.
+BullMQ      → Background jobs
+Redis       → Queue + Pub/Sub
+Worker      → Processes notifications
+Pub/Sub     → Sends notification events
+Socket.IO   → Real-time delivery
+MongoDB     → Persistent data
+Docker      → Containerization
+```
