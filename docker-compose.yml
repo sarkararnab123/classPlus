@@ -1,0 +1,39 @@
+services:
+
+  api:
+    build: .
+    container_name: classplus-api
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - mongo
+
+  worker:
+    build: .
+    container_name: classplus-worker
+    command: node bullmq/notification.worker.js
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - mongo
+
+  redis:
+    image: redis:7
+    container_name: classplus-redis
+    ports:
+      - "6379:6379"
+
+  mongo:
+    image: mongo:8
+    container_name: classplus-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+volumes:
+  mongo-data:

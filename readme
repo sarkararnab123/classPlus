@@ -1,0 +1,36 @@
+                     TEACHER
+                        │
+                        │ HTTP
+                        ▼
+                ┌───────────────┐
+                │    Express    │
+                └───────┬───────┘
+                        │
+                        ▼
+               Assignment Controller
+                        │
+                ┌───────┴────────┐
+                ▼                ▼
+            MongoDB          BullMQ Queue
+                                 │
+                                 ▼
+                               Redis
+                                 │
+                                 ▼
+                          BullMQ Worker
+                                 │
+                    ┌────────────┴────────────┐
+                    │                         │
+                    ▼                         ▼
+                MongoDB                  Redis Pub/Sub
+              Notification                     │
+                                              ▼
+                                         Subscriber
+                                              │
+                                              ▼
+                                         Socket.IO
+                                              │
+                             ┌────────────────┼──────────────┐
+                             ▼                ▼              ▼
+                        Student A        Student B       Student C
+                            🔔               🔔              🔔
