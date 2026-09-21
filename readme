@@ -2,48 +2,46 @@
 
 A backend system where teachers create assignments and all students assigned to that teacher receive **real-time notifications**.
 
-### Tech Stack
-
-* Node.js + Express
-* MongoDB + Mongoose
-* Redis
-* BullMQ
-* Redis Pub/Sub
-* Socket.IO
-* Docker + Docker Compose
-
----
-
 ## 🏗️ System Design
-
-```text
-Teacher
-   │
-   ▼
-Express API
-   │
-   ├──► MongoDB
-   │     Save Assignment
-   │
-   └──► BullMQ Queue
-             │
-             ▼
-          Worker
-             │
-             ├──► Find Students
-             ├──► Create Notifications
-             │
-             └──► Redis Pub/Sub
-                       │
-                       ▼
-                  API Subscriber
-                       │
-                       ▼
-                    Socket.IO
-                       │
-                       ▼
-                    Students
-```
+              TEACHER
+                 │
+                 │ Create Assignment
+                 ↓
+          Express Controller
+                 │
+        ┌────────┴─────────┐
+        ↓                  ↓
+    MongoDB             BullMQ
+   Assignment             │
+     saved                ↓
+                   Redis Queue
+              assignment-notification
+                           │
+                           ↓
+                        Worker
+                           │
+                           ↓
+                  Find students in DB
+                           │
+                           ↓
+                  Create notifications
+                      in MongoDB
+                           │
+                           ↓
+                    Redis Pub/Sub
+                           │
+                           ↓
+                      Subscriber
+                           │
+                           ↓
+                       Socket.IO
+                           │
+             ┌─────────────┼─────────────┐
+             ↓             ↓             ↓
+        student:S1    student:S2    student:S3
+             │             │             │
+             ↓             ↓             ↓
+          Student       Student       Student
 
 ### Flow
 
@@ -64,28 +62,6 @@ Socket.IO
        ↓
 Student receives notification
 ```
-
----
-
-## 📁 Structure
-
-```text
-classPlus/
-├── controllers/
-├── routes/
-├── models/
-├── config/
-├── redis/
-├── bullmq/
-│   ├── notification.queue.js
-│   └── notification.worker.js
-├── server.js
-├── Dockerfile
-├── docker-compose.yml
-└── .env
-```
-
----
 
 ## 🔌 API Routes
 
@@ -181,7 +157,7 @@ node bullmq/notification.worker.js
 
 ---
 
-## 🐳 Docker
+## Docker
 
 Docker Compose runs:
 
@@ -195,7 +171,7 @@ MongoDB can be hosted using **MongoDB Atlas**.
 
 ---
 
-## 🎯 Main Concepts
+## Main Concepts
 
 ```text
 BullMQ      → Background jobs
