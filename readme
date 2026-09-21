@@ -1,6 +1,3 @@
-
-
-```md
 ## 🏗️ System Architecture
 
 ```mermaid
@@ -18,7 +15,7 @@ flowchart TD
 
     F -->|Find assigned students| C
 
-    F -->|Create notifications| G[(MongoDB<br/>Notifications)]
+    F -->|Create notifications| G[(MongoDB Notifications)]
 
     F -->|Publish notification event| H[Redis Pub/Sub]
 
@@ -29,3 +26,4 @@ flowchart TD
     J --> K[👨‍🎓 Student 1]
     J --> L[👨‍🎓 Student 2]
     J --> M[👨‍🎓 Student 3]
+```
